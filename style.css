@@ -1,6 +1,7 @@
 :root {
     --primary: #3390ec;
-    --bg: #fff;
+    --bg-page: #fff;
+    --bg-chat: #8eacbb;
     --sidebar-w: 350px;
 }
 
@@ -10,7 +11,7 @@ body {
     margin: 0; 
     font-family: -apple-system, system-ui, sans-serif;
     height: 100vh;
-    height: 100dvh; /* ФИКС ДЛЯ МОБИЛОК (Убирает проблему с адресной строкой) */
+    height: 100dvh; /* ФИКС ДЛЯ МОБИЛОК */
     background: #fff;
     overflow: hidden;
 }
@@ -93,7 +94,7 @@ body {
 .msg-img { max-width: 100%; border-radius: 8px; }
 .msg-time { float: right; font-size: 10px; color: #aaa; margin-top: 5px; margin-left: 5px; }
 
-/* ПОЛЕ ВВОДА (Самое важное для планшета) */
+/* ПОЛЕ ВВОДА */
 .input-row {
     background: #fff; padding: 10px; display: flex; gap: 10px;
     flex-shrink: 0; /* ЗАПРЕЩАЕМ СЖИМАТЬСЯ */
@@ -128,8 +129,8 @@ body {
 .modal.active { display: flex; }
 .modal-box { background: white; padding: 20px; border-radius: 10px; width: 300px; }
 
-/* --- МОБИЛЬНАЯ АДАПТАЦИЯ (ПЛАНШЕТ/ТЕЛЕФОН) --- */
-@media (max-width: 900px) {
+/* --- МОБИЛЬНАЯ АДАПТАЦИЯ (РАСШИРИЛ ДО 1366px для ПЛАНШЕТОВ) --- */
+@media (max-width: 1366px) {
     .sidebar { width: 100%; position: absolute; top:0; left:0; border: none; }
     
     .chat-area {
@@ -138,10 +139,9 @@ body {
         z-index: 20;
     }
     
-    /* Класс, который JS добавляет, когда открываем чат */
     .chat-area.mobile-visible { transform: translateX(0); }
     
     .back-btn { display: block; }
     .fab { display: block; }
-    .chat-area.mobile-visible + .fab { display: none; } /* Скрыть кнопку нового чата, если открыт диалог */
-                 }
+    .chat-area.mobile-visible + .fab { display: none; }
+              }
