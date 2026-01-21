@@ -11,12 +11,10 @@
     <div id="call-modal" class="call-modal">
         <div class="call-content">
             <h3 id="call-status">Звонок...</h3>
-            
             <div class="video-container">
                 <video id="remoteVideo" autoplay playsinline></video>
                 <video id="localVideo" autoplay playsinline muted></video>
             </div>
-
             <div class="call-controls">
                 <button id="btn-answer" class="btn-green" style="display:none" onclick="answerCall()">📞</button>
                 <button id="btn-hangup" class="btn-red" onclick="hangUp()">❌</button>
@@ -25,7 +23,6 @@
     </div>
 
     <div class="drawer-overlay" onclick="toggleMenu()"></div>
-
     <div class="drawer" id="main-drawer">
         <div class="drawer-header">
             <div id="drawer-avatar" class="drawer-avatar-big" onclick="document.getElementById('avatar-upload').click()">📷</div>
@@ -43,16 +40,14 @@
         <div class="modal-content">
             <h3>Настройки</h3>
             <div class="setting-group">
-                <label>Размер шрифта: <span id="font-val">16</span>px</label>
+                <label>Размер текста: <span id="font-val">16</span>px</label>
                 <input type="range" min="12" max="24" value="16" oninput="changeFontSize(this.value)">
             </div>
             <button class="btn-primary" onclick="closeSettings()">Закрыть</button>
         </div>
     </div>
 
-    <div id="loader">
-        <div class="spinner"></div>
-    </div>
+    <div id="loader"><div class="spinner"></div></div>
 
     <div id="auth-screens">
         <div id="screen-phone" class="screen active">
@@ -80,15 +75,10 @@
     </div>
 
     <div id="app-container">
-        
         <div class="sidebar">
             <div class="sidebar-header">
-                <button class="menu-btn" onclick="toggleMenu()">
-                    <div style="font-size:24px">☰</div>
-                </button>
-                <div class="search-wrap">
-                    <input type="text" placeholder="Поиск">
-                </div>
+                <button class="menu-btn" onclick="toggleMenu()">☰</button>
+                <div class="search-wrap"><input type="text" placeholder="Поиск"></div>
             </div>
             <div id="chats-list"></div>
             <button class="fab-pencil" onclick="addContactPrompt()">✏️</button>
@@ -112,7 +102,6 @@
             <div class="input-area">
                 <button class="attach-btn" onclick="document.getElementById('img-input').click()">📎</button>
                 <input type="file" id="img-input" hidden accept="image/*" onchange="sendImage(this)">
-                
                 <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="handleEnter(event)" oninput="handleTyping()">
                 <button class="send-btn" onclick="sendMessage()">➤</button>
             </div>
@@ -120,337 +109,13 @@
     </div>
 
     <script type="module" src="script.js"></script>
-
     <script>
-        function sendSms(){} function verifyCode(){} function saveProfile(){} 
-        function toggleMenu(){} function addContactPrompt(){} function sendMessage(){} 
-        function closeChat(){} function handleEnter(){} function uploadAvatar(){} 
-        function sendImage(){} function startCall(){} function answerCall(){} function hangUp(){}
-        function openSettings(){} function closeSettings(){} function changeFontSize(){} function handleTyping(){}
-    </script>
-</body>
-</html>        .chat-item:hover { background: #f4f4f5; }
-        .chat-item.active-chat { background: #3390ec; color: white; }
-        .chat-item.active-chat .last-msg { color: rgba(255,255,255,0.8); }
-        
-        .avatar { width: 48px; height: 48px; background: linear-gradient(135deg, #6ab7ff, #3390ec); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0; }
-        .chat-info { overflow: hidden; }
-        .chat-name { font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .last-msg { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* ОКНО ЧАТА */
-        .chat-window { flex-grow: 1; display: flex; flex-direction: column; background: #95ba66 url('https://w.wallhaven.cc/full/lq/wallhaven-lqwg92.jpg'); background-blend-mode: overlay; background-size: cover; position: relative; }
-        .chat-header { padding: 10px 20px; background: white; border-bottom: 1px solid #dfe1e5; display: flex; align-items: center; justify-content: space-between; height: 40px;}
-        .chat-header-title { font-weight: bold; font-size: 16px; }
-        
-        #messages-area { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-        
-        .message { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 15px; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .message.my { align-self: flex-end; background: #eeffde; border-radius: 12px 12px 0 12px; }
-        .message.other { align-self: flex-start; background: white; border-radius: 12px 12px 12px 0; }
-        .msg-time { font-size: 11px; color: #aeb5bc; text-align: right; margin-top: 2px; float: right; margin-left: 8px; }
-        .message.my .msg-time { color: #5fb394; }
-
-        .input-area { padding: 10px 20px 20px; background: white; display: flex; gap: 10px; align-items: flex-end; }
-        #msg-input { flex-grow: 1; padding: 14px; border: none; font-size: 16px; max-height: 100px; resize: none; outline: none; }
-        .send-btn { width: 50px; height: 50px; background: white; color: #3390ec; border: none; cursor: pointer; font-size: 24px; transition: 0.2s; border-radius: 50%; }
-        .send-btn:hover { background: #f4f4f5; }
-
-        /* Пустое состояние */
-        .empty-state { display: flex; justify-content: center; align-items: center; height: 100%; color: white; background: rgba(0,0,0,0.4); font-size: 18px; border-radius: 12px; margin: 20px; }
-    </style>
-</head>
-<body>
-
-    <div id="screen-phone" class="screen active">
-        <div class="auth-card">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" width="60" style="margin-bottom: 20px;">
-            <h2>Kotogram</h2>
-            <p>Введите номер телефона для входа</p>
-            <div id="recaptcha-container"></div>
-            <input type="tel" id="phone-number" placeholder="+7 999 123 45 67" value="+7">
-            <button class="btn-primary" onclick="sendSms()">Продолжить</button>
-        </div>
-    </div>
-
-    <div id="screen-code" class="screen">
-        <div class="auth-card">
-            <h2>Проверка</h2>
-            <p>Мы отправили код в SMS</p>
-            <input type="text" id="verification-code" placeholder="123456" maxlength="6" style="text-align:center; letter-spacing: 5px;">
-            <button class="btn-primary" onclick="verifyCode()">Войти</button>
-            <p style="margin-top:15px; cursor:pointer; color:#3390ec" onclick="switchScreen('screen-phone')">Назад</p>
-        </div>
-    </div>
-
-    <div id="screen-nickname" class="screen">
-        <div class="auth-card">
-            <h2>Добро пожаловать</h2>
-            <p>Придумайте себе никнейм</p>
-            <input type="text" id="username-input" placeholder="Например: Kotik">
-            <button class="btn-primary" onclick="saveProfile()">Начать общение</button>
-        </div>
-    </div>
-
-    <div id="app-container">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <input type="text" id="search-input" placeholder="Поиск">
-                <button class="fab-btn" onclick="addContactPrompt()" title="Новый чат">✏️</button>
-            </div>
-            <div id="chats-list">
-                </div>
-        </div>
-
-        <div class="chat-window">
-            <div id="chat-header-name" class="chat-header">
-                <span class="chat-header-title">Kotogram</span>
-            </div>
-            
-            <div id="messages-area">
-                <div class="empty-state">Выберите чат слева, чтобы начать переписку</div>
-            </div>
-
-            <div class="input-area">
-                <input type="text" id="msg-input" placeholder="Написать сообщение..." onkeypress="handleEnter(event)">
-                <button class="send-btn" onclick="sendMessage()">➤</button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, where, onSnapshot, orderBy, doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        // ТВОЯ КОНФИГУРАЦИЯ
-        const firebaseConfig = {
-            apiKey: "AIzaSyD27Zv06c7GXi5iwcXFxEkhwH1SuXoElas",
-            authDomain: "kotogram-1b6c8.firebaseapp.com",
-            databaseURL: "https://kotogram-1b6c8-default-rtdb.firebaseio.com",
-            projectId: "kotogram-1b6c8",
-            storageBucket: "kotogram-1b6c8.firebasestorage.app",
-            messagingSenderId: "815772269065",
-            appId: "1:815772269065:web:a130f535f10445c48596d8"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        auth.useDeviceLanguage(); // Авто-язык для SMS
-
-        // Состояние приложения
-        window.confirmationResult = null;
-        let currentUser = null;
-        let currentChatId = null;
-
-        // --- 1. АВТОРИЗАЦИЯ ---
-
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { 'size': 'normal' });
-
-        window.sendSms = async () => {
-            const phone = document.getElementById('phone-number').value;
-            try {
-                window.confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-                switchScreen('screen-code');
-            } catch (error) {
-                alert("Ошибка: " + error.message);
-                console.error(error);
-            }
-        };
-
-        window.verifyCode = async () => {
-            const code = document.getElementById('verification-code').value;
-            try {
-                const result = await window.confirmationResult.confirm(code);
-                checkUserProfile(result.user);
-            } catch (error) {
-                alert("Неверный код!");
-                console.error(error);
-            }
-        };
-
-        // --- 2. ЛОГИКА ПРОФИЛЯ ---
-
-        async function checkUserProfile(user) {
-            const userRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userRef);
-
-            if (userSnap.exists()) {
-                startApp(user); // Если старый - пускаем
-            } else {
-                switchScreen('screen-nickname'); // Если новый - регистрация
-            }
-        }
-
-        window.saveProfile = async () => {
-            const username = document.getElementById('username-input').value;
-            const user = auth.currentUser;
-            
-            if(!username) return alert("Введите никнейм!");
-
-            await setDoc(doc(db, "users", user.uid), {
-                uid: user.uid,
-                phoneNumber: user.phoneNumber,
-                username: username,
-                createdAt: serverTimestamp()
-            });
-            startApp(user);
-        };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) checkUserProfile(user);
-            else switchScreen('screen-phone');
-        });
-
-        // --- 3. ГЛАВНОЕ ПРИЛОЖЕНИЕ ---
-
-        function startApp(user) {
-            currentUser = user;
-            
-            // Прячем все экраны входа
-            document.querySelectorAll('.screen').forEach(s => {
-                s.classList.remove('active'); 
-                s.style.display = 'none'; // Жесткое скрытие, чтобы убрать ошибку
-            });
-
-            // Показываем интерфейс
-            const app = document.getElementById('app-container');
-            app.style.display = 'flex';
-            
-            loadChats();
-        }
-
-        // --- 4. ЧАТЫ И СООБЩЕНИЯ ---
-
-        function loadChats() {
-            const q = query(collection(db, "chats"), where("participants", "array-contains", currentUser.uid));
-            
-            onSnapshot(q, (snapshot) => {
-                const list = document.getElementById('chats-list');
-                list.innerHTML = "";
-                
-                snapshot.forEach(async (docSnap) => {
-                    const data = docSnap.data();
-                    const chatId = docSnap.id;
-                    
-                    // Ищем имя друга
-                    const friendId = data.participants.find(id => id !== currentUser.uid);
-                    let friendName = "Собеседник";
-                    
-                    if(friendId) {
-                        const friendSnap = await getDoc(doc(db, "users", friendId));
-                        if(friendSnap.exists()) friendName = friendSnap.data().username;
-                    }
-
-                    const div = document.createElement('div');
-                    div.className = `chat-item ${currentChatId === chatId ? 'active-chat' : ''}`;
-                    div.onclick = () => openChat(chatId, friendName);
-                    
-                    div.innerHTML = `
-                        <div class="avatar">${friendName[0].toUpperCase()}</div>
-                        <div class="chat-info">
-                            <div class="chat-name">${friendName}</div>
-                            <div class="last-msg">${data.lastMessage || "Начните общение"}</div>
-                        </div>
-                    `;
-                    list.appendChild(div);
-                });
-            });
-        }
-
-        window.openChat = (chatId, name) => {
-            currentChatId = chatId;
-            document.getElementById('chat-header-name').innerHTML = `<span class="chat-header-title">${name}</span>`;
-            
-            // Подсветка активного чата в списке
-            loadChats(); 
-
-            const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
-            
-            onSnapshot(q, (snapshot) => {
-                const area = document.getElementById('messages-area');
-                area.innerHTML = "";
-                
-                snapshot.forEach(d => {
-                    const msg = d.data();
-                    const isMy = msg.senderId === currentUser.uid;
-                    const date = msg.timestamp ? new Date(msg.timestamp.toDate()) : new Date();
-                    const timeStr = date.getHours() + ":" + String(date.getMinutes()).padStart(2, '0');
-
-                    const bubble = document.createElement('div');
-                    bubble.className = `message ${isMy ? 'my' : 'other'}`;
-                    bubble.innerHTML = `
-                        ${msg.text}
-                        <span class="msg-time">${timeStr}</span>
-                    `;
-                    area.appendChild(bubble);
-                });
-                area.scrollTop = area.scrollHeight;
-            });
-        };
-
-        window.sendMessage = async () => {
-            const input = document.getElementById('msg-input');
-            const text = input.value.trim();
-            if (!text || !currentChatId) return;
-
-            input.value = "";
-            
-            // 1. Сообщение
-            await addDoc(collection(db, "chats", currentChatId, "messages"), {
-                text: text,
-                senderId: currentUser.uid,
-                timestamp: serverTimestamp()
-            });
-
-            // 2. Обновить чат
-            await updateDoc(doc(db, "chats", currentChatId), {
-                lastMessage: text,
-                lastMessageTime: serverTimestamp()
-            });
-        };
-
-        window.handleEnter = (e) => {
-            if(e.key === 'Enter') window.sendMessage();
-        }
-
-        // --- 5. ДОБАВЛЕНИЕ КОНТАКТА ---
-
-        window.addContactPrompt = async () => {
-            const phone = prompt("Введите номер телефона друга (+7... или +380...):");
-            if (!phone) return;
-
-            // Ищем юзера
-            const q = query(collection(db, "users"), where("phoneNumber", "==", phone));
-            const found = await getDocs(q);
-
-            if (found.empty) {
-                alert("Пользователь не найден! Попроси его зарегистрироваться.");
-                return;
-            }
-
-            const friend = found.docs[0].data();
-            
-            // Генерируем ID чата (сортировка важна, чтобы у обоих был один чат)
-            const ids = [currentUser.uid, friend.uid].sort();
-            const chatId = ids.join("_");
-
-            // Создаем чат если нет
-            await setDoc(doc(db, "chats", chatId), {
-                participants: ids,
-                lastMessage: "",
-                createdAt: serverTimestamp()
-            }, { merge: true });
-
-            alert("Чат создан!");
-        };
-
-        // Вспомогательная функция
-        window.switchScreen = (id) => {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-        };
+        window.sendSms = () => {}; window.verifyCode = () => {}; window.saveProfile = () => {};
+        window.toggleMenu = () => {}; window.openSettings = () => {}; window.closeSettings = () => {};
+        window.changeFontSize = () => {}; window.addContactPrompt = () => {}; window.sendMessage = () => {};
+        window.closeChat = () => {}; window.handleEnter = () => {}; window.handleTyping = () => {};
+        window.uploadAvatar = () => {}; window.sendImage = () => {}; window.startCall = () => {};
+        window.answerCall = () => {}; window.hangUp = () => {};
     </script>
 </body>
 </html>
