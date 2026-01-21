@@ -24,47 +24,57 @@ let chatsUnsubscribe = null;
 let messagesUnsubscribe = null;
 let typingTimeout = null;
 
-// Переменные для звонков
+// --- ЗВУКИ (DISCORD STYLE) ---
+const soundRing = new Audio('https://www.myinstants.com/media/sounds/discord-call.mp3');
+soundRing.loop = true; // Зацикливаем гудок
+
+const soundJoin = new Audio('https://www.myinstants.com/media/sounds/discordjoin.mp3');
+const soundLeave = new Audio('https://www.myinstants.com/media/sounds/discord-leave-noise.mp3');
+
+// Вспомогательная функция остановки гудка
+function stopRing() {
+    soundRing.pause();
+    soundRing.currentTime = 0;
+}
+
+// --- WEBRTC ---
 let pc = null;
 let localStream = null;
 let remoteStream = null;
 let callDocId = null;
-const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302'] }] };
+const servers = { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }] };
 
-// --- Глобальные функции для HTML ---
+// ==========================================
+// 1. UI И АВТОРИЗАЦИЯ
+// ==========================================
+
 window.toggleMenu = () => { document.getElementById('main-drawer').classList.toggle('open'); document.querySelector('.drawer-overlay').classList.toggle('active'); };
 window.openSettings = () => { window.toggleMenu(); document.getElementById('settings-modal').classList.add('active'); };
 window.closeSettings = () => { document.getElementById('settings-modal').classList.remove('active'); };
 window.changeFontSize = (val) => { document.documentElement.style.setProperty('--font-size', val+'px'); document.getElementById('font-val').innerText=val; };
 
-// --- АВТОРИЗАЦИЯ ---
-window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { 'size': 'normal' });
+window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {size:'normal'});
 
 window.sendSms = async () => {
-    const p = document.getElementById('phone-number').value;
-    const b = document.getElementById('btn-login');
-    b.disabled = true; b.innerText = "Ждите...";
     try {
+        const p = document.getElementById('phone-number').value;
         window.confirmationResult = await signInWithPhoneNumber(auth, p, window.recaptchaVerifier);
-        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        document.querySelector('.screen.active').classList.remove('active');
         document.getElementById('screen-code').classList.add('active');
-    } catch(e) { alert("Ошибка: "+e.message); b.disabled=false; b.innerText="Войти"; }
+    } catch(e){ alert(e.message); }
 };
 
 window.verifyCode = async () => {
     try {
         const r = await window.confirmationResult.confirm(document.getElementById('verification-code').value);
         checkUser(r.user);
-    } catch(e) { alert("Неверный код"); }
+    } catch(e){ alert("Код неверный"); }
 };
 
-async function checkUser(user) {
-    const s = await getDoc(doc(db,"users",user.uid));
-    if(s.exists()) startApp(user, s.data());
-    else {
-        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-        document.getElementById('screen-nickname').classList.add('active');
-    }
+async function checkUser(u) {
+    const s = await getDoc(doc(db,"users",u.uid));
+    if(s.exists()) startApp(u, s.data());
+    else { document.querySelector('.screen.active').classList.remove('active'); document.getElementById('screen-nickname').classList.add('active'); }
 }
 
 window.saveProfile = async () => {
@@ -76,93 +86,63 @@ window.saveProfile = async () => {
 
 onAuthStateChanged(auth, u => {
     if(u) checkUser(u);
-    else {
-        document.getElementById('loader').style.display='none';
-        document.getElementById('app-container').style.display='none';
-        document.getElementById('auth-screens').style.display='flex';
-        document.getElementById('screen-phone').classList.add('active');
-        const b = document.getElementById('btn-login'); if(b){b.disabled=false; b.innerText="Войти";}
-    }
+    else { document.getElementById('auth-container').classList.remove('hidden'); document.getElementById('app-layout').style.display='none'; }
 });
 
-function startApp(user, data) {
-    currentUser = user;
-    document.getElementById('auth-screens').style.display='none';
-    document.getElementById('loader').style.display='none';
-    document.getElementById('app-container').style.display='flex';
+function startApp(u, data) {
+    currentUser = u;
+    document.getElementById('auth-container').classList.add('hidden');
+    document.getElementById('app-layout').style.display='flex';
     if(data) updateDrawer(data);
-    else getDoc(doc(db,"users",user.uid)).then(s=>updateDrawer(s.data()));
     loadChats();
-    trackMyStatus();
+    trackStatus();
 }
 
 function updateDrawer(data) {
     document.getElementById('drawer-name').innerText = data.username || "Я";
-    document.getElementById('drawer-phone').innerText = currentUser.phoneNumber;
     const el = document.getElementById('drawer-avatar');
-    if(data.photoURL && data.photoURL !== "undefined") {
-        el.style.backgroundImage = `url(${data.photoURL})`;
-        el.innerText = "";
-    } else {
-        el.style.backgroundImage = "";
-        el.innerText = "📷";
-    }
+    if(data.photoURL) { el.style.backgroundImage = `url(${data.photoURL})`; el.innerText=""; }
 }
 
-// --- ЧАТЫ ---
+// ==========================================
+// 2. ЧАТЫ
+// ==========================================
 function loadChats() {
     if(chatsUnsubscribe) chatsUnsubscribe();
-    // Очищаем список перед загрузкой, чтобы не было дублей при перезапуске
     document.getElementById('chats-list').innerHTML = ""; 
-
     const q = query(collection(db,"chats"), where("participants","array-contains",currentUser.uid));
     
     chatsUnsubscribe = onSnapshot(q, (snapshot) => {
         const list = document.getElementById('chats-list');
         snapshot.docChanges().forEach(async (change) => {
-            if (change.type === "added" || change.type === "modified") {
+            if(change.type === "added" || change.type === "modified") {
                 const data = change.doc.data();
                 const cid = change.doc.id;
-                
-                // Ищем друга
                 const fid = data.participants.find(id => id !== currentUser.uid);
-                let fName = "Без имени";
-                let fPhoto = "";
-
-                if (fid) {
-                    const fSnap = await getDoc(doc(db,"users",fid));
-                    if (fSnap.exists()) {
-                        fName = fSnap.data().username || "Без имени";
-                        fPhoto = fSnap.data().photoURL;
-                    }
+                
+                let fName = "...", fPhoto = "";
+                if(fid) {
+                    const f = await getDoc(doc(db,"users",fid));
+                    if(f.exists()) { fName=f.data().username; fPhoto=f.data().photoURL; }
                 }
 
-                // Проверка на "undefined"
-                if (fPhoto === "undefined") fPhoto = "";
-
-                // Рисуем
-                let div = document.getElementById(`chat-${cid}`);
-                const isActive = currentChatId === cid ? 'active' : '';
-                const style = fPhoto ? `background-image:url(${fPhoto})` : '';
-                const txt = fPhoto ? '' : fName[0];
-
+                let div = document.getElementById(`c-${cid}`);
+                const isActive = currentChatId===cid?'active':'';
+                const avaStyle = fPhoto ? `background-image:url(${fPhoto})` : '';
+                const avaText = fPhoto ? '' : fName[0];
+                
                 const html = `
-                    <div class="avatar-small" style="${style}">${txt}</div>
+                    <div class="avatar-small" style="${avaStyle}">${avaText}</div>
                     <div class="chat-info">
                         <div class="chat-name">${fName}</div>
-                        <div class="last-msg">${data.lastMessage || "..."}</div>
+                        <div class="last-msg">${data.lastMessage || ""}</div>
                     </div>`;
 
-                if(div) {
-                    div.className = `chat-item ${isActive}`;
-                    div.innerHTML = html;
-                } else {
-                    div = document.createElement('div');
-                    div.id = `chat-${cid}`;
-                    div.className = `chat-item ${isActive}`;
+                if(div) { div.className=`chat-item ${isActive}`; div.innerHTML=html; }
+                else {
+                    div=document.createElement('div'); div.id=`c-${cid}`; div.className=`chat-item ${isActive}`;
                     div.onclick = () => openChat(cid, fName, fid, fPhoto);
-                    div.innerHTML = html;
-                    list.appendChild(div);
+                    div.innerHTML=html; list.appendChild(div);
                 }
                 listenCalls(cid);
             }
@@ -170,45 +150,36 @@ function loadChats() {
     });
 }
 
-// --- ОТКРЫТИЕ ЧАТА ---
+// ==========================================
+// 3. ОТКРЫТИЕ ЧАТА
+// ==========================================
 window.openChat = (cid, name, fid, photo) => {
     currentChatId = cid;
-    document.body.classList.add('chat-open');
+    document.getElementById('chat-area').classList.add('mobile-visible');
+    
     document.querySelectorAll('.chat-item').forEach(e=>e.classList.remove('active'));
-    const item = document.getElementById(`chat-${cid}`);
-    if(item) item.classList.add('active');
+    document.getElementById(`c-${cid}`)?.classList.add('active');
 
     document.getElementById('chat-header-name').innerText = name;
     const ha = document.getElementById('header-avatar');
-    if(photo && photo !== "undefined") {
-        ha.style.backgroundImage = `url(${photo})`;
-        ha.innerText = "";
-    } else {
-        ha.style.backgroundImage = "";
-        ha.innerText = name[0];
-    }
+    if(photo) { ha.style.backgroundImage=`url(${photo})`; ha.innerText=""; }
+    else { ha.style.backgroundImage=""; ha.innerText=name[0]; }
 
     trackFriend(cid, fid);
 
     if(messagesUnsubscribe) messagesUnsubscribe();
-    const q = query(collection(db,"chats",cid,"messages"), orderBy("timestamp","asc"));
-    messagesUnsubscribe = onSnapshot(q, (snap) => {
+    messagesUnsubscribe = onSnapshot(query(collection(db,"chats",cid,"messages"), orderBy("timestamp","asc")), s => {
         const area = document.getElementById('messages-area');
-        if(snap.empty) area.innerHTML = '<div class="empty-placeholder">Нет сообщений</div>';
-        else {
-            const pl = area.querySelector('.empty-placeholder');
-            if(pl) pl.remove();
-        }
+        if(s.empty) area.innerHTML = '<div class="placeholder">Нет сообщений</div>';
+        else if(area.querySelector('.placeholder')) area.innerHTML="";
         
-        snap.docChanges().forEach(ch => {
-            if(ch.type==="added") {
-                const m = ch.doc.data();
+        s.docChanges().forEach(c => {
+            if(c.type==="added") {
+                const m = c.doc.data();
                 const div = document.createElement('div');
                 div.className = `message ${m.senderId===currentUser.uid?'my':'other'}`;
                 const t = m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
-                let content = m.text;
-                if(m.type==='image') content = `<img src="${m.imageUrl}" class="msg-img" onclick="window.open('${m.imageUrl}')">`;
-                div.innerHTML = `${content}<div class="msg-time">${t}</div>`;
+                div.innerHTML = `${m.type==='image' ? `<img src="${m.imageUrl}" class="msg-img">` : m.text}<div class="msg-time">${t}</div>`;
                 area.appendChild(div);
             }
         });
@@ -216,156 +187,156 @@ window.openChat = (cid, name, fid, photo) => {
     });
 };
 
-// --- СООБЩЕНИЯ И ФОТО ---
+window.closeChat = () => {
+    document.getElementById('chat-area').classList.remove('mobile-visible');
+    currentChatId = null;
+};
+
+// ==========================================
+// 4. СООБЩЕНИЯ И ФОТО
+// ==========================================
 window.sendMessage = async () => {
-    const inp = document.getElementById('msg-input');
-    const txt = inp.value.trim();
-    if(!txt || !currentChatId) return;
-    inp.value = "";
-    await addDoc(collection(db,"chats",currentChatId,"messages"), {text:txt, senderId:currentUser.uid, timestamp:serverTimestamp()});
-    await updateDoc(doc(db,"chats",currentChatId), {lastMessage:txt, lastMessageTime:serverTimestamp()});
+    const i = document.getElementById('msg-input');
+    if(!i.value || !currentChatId) return;
+    const txt = i.value; i.value="";
+    await addDoc(collection(db,"chats",currentChatId,"messages"),{text:txt, senderId:currentUser.uid, timestamp:serverTimestamp()});
+    await updateDoc(doc(db,"chats",currentChatId),{lastMessage:txt, lastMessageTime:serverTimestamp()});
 };
-window.handleEnter = (e) => { if(e.key==='Enter') window.sendMessage(); };
-window.closeChat = () => { document.body.classList.remove('chat-open'); currentChatId=null; };
+window.handleEnter = e => { if(e.key==='Enter') window.sendMessage(); };
 
-async function uploadToImgBB(file) {
-    const fd = new FormData(); fd.append("image", file);
-    const r = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {method:"POST", body:fd});
-    const j = await r.json(); return j.data.url;
+async function upImg(f) {
+    const d=new FormData(); d.append('image',f);
+    const r=await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,{method:'POST',body:d});
+    return (await r.json()).data.url;
 }
-
-window.sendImage = async (inp) => {
-    if(!currentChatId || !inp.files[0]) return;
-    const url = await uploadToImgBB(inp.files[0]);
-    await addDoc(collection(db,"chats",currentChatId,"messages"), {imageUrl:url, type:'image', senderId:currentUser.uid, timestamp:serverTimestamp()});
-    await updateDoc(doc(db,"chats",currentChatId), {lastMessage:"📷 Фото", lastMessageTime:serverTimestamp()});
+window.sendImage = async (i) => {
+    if(!i.files[0]||!currentChatId)return;
+    const u = await upImg(i.files[0]);
+    await addDoc(collection(db,"chats",currentChatId,"messages"),{imageUrl:u, type:'image', senderId:currentUser.uid, timestamp:serverTimestamp()});
+};
+window.uploadAvatar = async (i) => {
+    if(!i.files[0])return;
+    const u = await upImg(i.files[0]);
+    await updateDoc(doc(db,"users",currentUser.uid),{photoURL:u});
+    updateDrawer({username:document.getElementById('drawer-name').innerText, photoURL:u});
 };
 
-window.uploadAvatar = async (inp) => {
-    if(!inp.files[0]) return;
-    const url = await uploadToImgBB(inp.files[0]);
-    await updateDoc(doc(db,"users",currentUser.uid), {photoURL:url});
-    updateDrawer({username:document.getElementById('drawer-name').innerText, photoURL:url});
-};
-
-// --- СТАТУСЫ ---
+// ==========================================
+// 5. СТАТУСЫ
+// ==========================================
 window.handleTyping = () => {
     if(!currentChatId) return;
-    const r = doc(db,"chats",currentChatId);
-    updateDoc(r, {[`typing.${currentUser.uid}`]:true});
+    const r=doc(db,"chats",currentChatId);
+    updateDoc(r,{[`typing.${currentUser.uid}`]:true});
     if(typingTimeout) clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => updateDoc(r, {[`typing.${currentUser.uid}`]:false}), 2000);
+    typingTimeout=setTimeout(()=>updateDoc(r,{[`typing.${currentUser.uid}`]:false}),2000);
 };
-function trackMyStatus() {
-    const up = () => currentUser && updateDoc(doc(db,"users",currentUser.uid),{lastSeen:serverTimestamp()});
-    up(); setInterval(up, 60000);
-}
+function trackStatus() { setInterval(()=>currentUser&&updateDoc(doc(db,"users",currentUser.uid),{lastSeen:serverTimestamp()}),60000); }
 function trackFriend(cid, fid) {
-    onSnapshot(doc(db,"chats",cid), s => {
-        const d = s.data();
-        const el = document.getElementById('chat-header-status');
+    onSnapshot(doc(db,"chats",cid),s=>{
+        const d=s.data(); const el=document.getElementById('chat-header-status');
         if(d?.typing && d.typing[fid]) el.innerText="печатает...";
-        else getDoc(doc(db,"users",fid)).then(us=>{
-            const u = us.data();
-            if(u?.lastSeen) {
-                const diff = (Date.now()-u.lastSeen.toDate())/60000;
+        else getDoc(doc(db,"users",fid)).then(u=>{
+            const ud=u.data();
+            if(ud?.lastSeen) {
+                const diff=(Date.now()-ud.lastSeen.toDate())/60000;
                 el.innerText = diff<5 ? "в сети" : "был(а) недавно";
             }
         });
     });
 }
 window.addContactPrompt = async () => {
-    const p = prompt("Телефон (+7...):"); if(!p) return;
-    const s = await getDocs(query(collection(db,"users"), where("phoneNumber","==",p)));
-    if(s.empty) return alert("Не найден");
-    const f = s.docs[0].data();
-    const ids = [currentUser.uid, f.uid].sort();
-    await setDoc(doc(db,"chats",ids.join("_")), {participants:ids, lastMessage:"", createdAt:serverTimestamp()}, {merge:true});
+    const p=prompt("Телефон:"); if(!p)return;
+    const s=await getDocs(query(collection(db,"users"),where("phoneNumber","==",p)));
+    if(s.empty)return alert("Нет такого");
+    const f=s.docs[0].data(); const ids=[currentUser.uid,f.uid].sort();
+    await setDoc(doc(db,"chats",ids.join("_")),{participants:ids, lastMessage:""},{merge:true});
 };
 
-// --- ЗВОНКИ ---
+// ==========================================
+// 6. ЗВОНКИ (СО ЗВУКАМИ)
+// ==========================================
+
+// НАЧАТЬ ЗВОНОК
 window.startCall = async () => {
-    if(!currentChatId) return;
     document.getElementById('call-modal').classList.add('active');
     document.getElementById('btn-answer').style.display='none';
-    document.getElementById('call-status').innerText="Звоним...";
     
-    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+    // Включаем звук звонка
+    soundRing.play().catch(e => console.log("Автоплей блокирован, нужен клик"));
+
+    localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
     document.getElementById('localVideo').srcObject = localStream;
-    remoteStream = new MediaStream();
-    document.getElementById('remoteVideo').srcObject = remoteStream;
-
-    pc = new RTCPeerConnection(servers);
+    remoteStream=new MediaStream(); document.getElementById('remoteVideo').srcObject=remoteStream;
+    pc=new RTCPeerConnection(servers);
     localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-    pc.ontrack = e => e.streams[0].getTracks().forEach(t=>remoteStream.addTrack(t));
-
-    const callRef = doc(collection(db,"chats",currentChatId,"calls"));
-    callDocId = callRef.id;
-    const offerCands = collection(callRef,'offerCandidates');
-    const ansCands = collection(callRef,'answerCandidates');
-
-    pc.onicecandidate = e => e.candidate && addDoc(offerCands, e.candidate.toJSON());
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await setDoc(callRef, {offer:{sdp:offer.sdp, type:offer.type, callerId:currentUser.uid}});
-
-    onSnapshot(callRef, s => {
+    pc.ontrack=e=>e.streams[0].getTracks().forEach(t=>remoteStream.addTrack(t));
+    const cr=doc(collection(db,"chats",currentChatId,"calls")); callDocId=cr.id;
+    pc.onicecandidate=e=>e.candidate&&addDoc(collection(cr,'offerCandidates'),e.candidate.toJSON());
+    const off=await pc.createOffer(); await pc.setLocalDescription(off);
+    await setDoc(cr,{offer:{sdp:off.sdp,type:off.type,callerId:currentUser.uid}});
+    
+    // Ждем ответа
+    onSnapshot(cr, s => {
         const d = s.data();
         if(!pc.currentRemoteDescription && d?.answer) {
             pc.setRemoteDescription(new RTCSessionDescription(d.answer));
             document.getElementById('call-status').innerText="В разговоре";
+            // ОТВЕТИЛИ: Остановить звон, Играть Join
+            stopRing();
+            soundJoin.play();
         }
     });
-    onSnapshot(ansCands, s => s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
+    onSnapshot(collection(cr,'answerCandidates'), s=>s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
 };
 
+// СЛУШАТЬ ВХОДЯЩИЕ
 function listenCalls(cid) {
-    onSnapshot(query(collection(db,"chats",cid,"calls")), s => {
-        s.docChanges().forEach(c => {
-            if(c.type==='added') {
-                const d = c.doc.data();
+    onSnapshot(query(collection(db,"chats",cid,"calls")), s=>{
+        s.docChanges().forEach(c=>{
+            if(c.type==='added'){
+                const d=c.doc.data();
                 if(d.offer && d.offer.callerId!==currentUser.uid && !d.answer) {
-                    callDocId = c.doc.id;
-                    currentChatId = cid;
+                    callDocId=c.doc.id; currentChatId=cid;
                     document.getElementById('call-modal').classList.add('active');
                     document.getElementById('btn-answer').style.display='flex';
                     document.getElementById('call-status').innerText="Входящий...";
+                    
+                    // Включаем звук звонка
+                    soundRing.play();
                 }
             }
         });
     });
 }
 
+// ОТВЕТИТЬ
 window.answerCall = async () => {
+    // Взял трубку: Стоп звон, Играть Join
+    stopRing();
+    soundJoin.play();
+
     document.getElementById('btn-answer').style.display='none';
-    document.getElementById('call-status').innerText="Соединение...";
-    
-    const callRef = doc(db,"chats",currentChatId,"calls",callDocId);
-    const offerCands = collection(callRef,'offerCandidates');
-    const ansCands = collection(callRef,'answerCandidates');
-
-    pc = new RTCPeerConnection(servers);
-    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-    document.getElementById('localVideo').srcObject = localStream;
-    remoteStream = new MediaStream();
-    document.getElementById('remoteVideo').srcObject = remoteStream;
-
+    const cr=doc(db,"chats",currentChatId,"calls",callDocId);
+    pc=new RTCPeerConnection(servers);
+    localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById('localVideo').srcObject=localStream;
+    remoteStream=new MediaStream(); document.getElementById('remoteVideo').srcObject=remoteStream;
     localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-    pc.ontrack = e => e.streams[0].getTracks().forEach(t=>remoteStream.addTrack(t));
-    pc.onicecandidate = e => e.candidate && addDoc(ansCands, e.candidate.toJSON());
-
-    const d = (await getDoc(callRef)).data();
-    await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    await updateDoc(callRef, {answer:{type:ans.type, sdp:ans.sdp}});
-
-    onSnapshot(offerCands, s => s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
+    pc.ontrack=e=>e.streams[0].getTracks().forEach(t=>remoteStream.addTrack(t));
+    pc.onicecandidate=e=>e.candidate&&addDoc(collection(cr,'answerCandidates'),e.candidate.toJSON());
+    const d=(await getDoc(cr)).data(); await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+    const ans=await pc.createAnswer(); await pc.setLocalDescription(ans);
+    await updateDoc(cr,{answer:{type:ans.type,sdp:ans.sdp}});
+    onSnapshot(collection(cr,'offerCandidates'), s=>s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
 };
 
-window.hangUp = async () => {
+// СБРОСИТЬ
+window.hangUp = () => {
+    // Сбросил: Стоп звон, Играть Leave
+    stopRing();
+    soundLeave.play();
+
     if(localStream) localStream.getTracks().forEach(t=>t.stop());
-    if(pc) pc.close();
-    pc=null; localStream=null;
-    document.getElementById('call-modal').classList.remove('active');
+    if(pc) pc.close(); pc=null; document.getElementById('call-modal').classList.remove('active');
 };
