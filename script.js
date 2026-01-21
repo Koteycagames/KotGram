@@ -24,37 +24,27 @@ let chatsUnsubscribe = null;
 let messagesUnsubscribe = null;
 let typingTimeout = null;
 
-// --- ЗВУКИ (DISCORD STYLE) ---
-const soundRing = new Audio('https://www.myinstants.com/media/sounds/discord-call.mp3');
-soundRing.loop = true; // Зацикливаем гудок
-
+// Звуки
+const soundRing = new Audio('https://www.myinstants.com/media/sounds/discord-call.mp3'); soundRing.loop = true;
 const soundJoin = new Audio('https://www.myinstants.com/media/sounds/discordjoin.mp3');
 const soundLeave = new Audio('https://www.myinstants.com/media/sounds/discord-leave-noise.mp3');
+function stopRing() { soundRing.pause(); soundRing.currentTime = 0; }
 
-// Вспомогательная функция остановки гудка
-function stopRing() {
-    soundRing.pause();
-    soundRing.currentTime = 0;
-}
-
-// --- WEBRTC ---
+// WebRTC
 let pc = null;
 let localStream = null;
 let remoteStream = null;
 let callDocId = null;
 const servers = { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }] };
 
-// ==========================================
-// 1. UI И АВТОРИЗАЦИЯ
-// ==========================================
-
+// UI
 window.toggleMenu = () => { document.getElementById('main-drawer').classList.toggle('open'); document.querySelector('.drawer-overlay').classList.toggle('active'); };
 window.openSettings = () => { window.toggleMenu(); document.getElementById('settings-modal').classList.add('active'); };
 window.closeSettings = () => { document.getElementById('settings-modal').classList.remove('active'); };
 window.changeFontSize = (val) => { document.documentElement.style.setProperty('--font-size', val+'px'); document.getElementById('font-val').innerText=val; };
 
+// АВТОРИЗАЦИЯ
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {size:'normal'});
-
 window.sendSms = async () => {
     try {
         const p = document.getElementById('phone-number').value;
@@ -63,20 +53,17 @@ window.sendSms = async () => {
         document.getElementById('screen-code').classList.add('active');
     } catch(e){ alert(e.message); }
 };
-
 window.verifyCode = async () => {
     try {
         const r = await window.confirmationResult.confirm(document.getElementById('verification-code').value);
         checkUser(r.user);
     } catch(e){ alert("Код неверный"); }
 };
-
 async function checkUser(u) {
     const s = await getDoc(doc(db,"users",u.uid));
     if(s.exists()) startApp(u, s.data());
     else { document.querySelector('.screen.active').classList.remove('active'); document.getElementById('screen-nickname').classList.add('active'); }
 }
-
 window.saveProfile = async () => {
     const n = document.getElementById('username-input').value;
     const u = auth.currentUser;
@@ -104,9 +91,7 @@ function updateDrawer(data) {
     if(data.photoURL) { el.style.backgroundImage = `url(${data.photoURL})`; el.innerText=""; }
 }
 
-// ==========================================
-// 2. ЧАТЫ
-// ==========================================
+// ЧАТЫ
 function loadChats() {
     if(chatsUnsubscribe) chatsUnsubscribe();
     document.getElementById('chats-list').innerHTML = ""; 
@@ -150,9 +135,7 @@ function loadChats() {
     });
 }
 
-// ==========================================
-// 3. ОТКРЫТИЕ ЧАТА
-// ==========================================
+// ОТКРЫТИЕ ЧАТА
 window.openChat = (cid, name, fid, photo) => {
     currentChatId = cid;
     document.getElementById('chat-area').classList.add('mobile-visible');
@@ -192,9 +175,7 @@ window.closeChat = () => {
     currentChatId = null;
 };
 
-// ==========================================
-// 4. СООБЩЕНИЯ И ФОТО
-// ==========================================
+// СООБЩЕНИЯ
 window.sendMessage = async () => {
     const i = document.getElementById('msg-input');
     if(!i.value || !currentChatId) return;
@@ -221,9 +202,7 @@ window.uploadAvatar = async (i) => {
     updateDrawer({username:document.getElementById('drawer-name').innerText, photoURL:u});
 };
 
-// ==========================================
-// 5. СТАТУСЫ
-// ==========================================
+// СТАТУСЫ
 window.handleTyping = () => {
     if(!currentChatId) return;
     const r=doc(db,"chats",currentChatId);
@@ -254,16 +233,14 @@ window.addContactPrompt = async () => {
 };
 
 // ==========================================
-// 6. ЗВОНКИ (СО ЗВУКАМИ)
+// 6. ЗВОНКИ (АВТО-СБРОС)
 // ==========================================
 
-// НАЧАТЬ ЗВОНОК
 window.startCall = async () => {
     document.getElementById('call-modal').classList.add('active');
     document.getElementById('btn-answer').style.display='none';
     
-    // Включаем звук звонка
-    soundRing.play().catch(e => console.log("Автоплей блокирован, нужен клик"));
+    soundRing.play().catch(e => console.log("Автоплей"));
 
     localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
     document.getElementById('localVideo').srcObject = localStream;
@@ -274,35 +251,38 @@ window.startCall = async () => {
     const cr=doc(collection(db,"chats",currentChatId,"calls")); callDocId=cr.id;
     pc.onicecandidate=e=>e.candidate&&addDoc(collection(cr,'offerCandidates'),e.candidate.toJSON());
     const off=await pc.createOffer(); await pc.setLocalDescription(off);
-    await setDoc(cr,{offer:{sdp:off.sdp,type:off.type,callerId:currentUser.uid}});
+    await setDoc(cr,{offer:{sdp:off.sdp,type:off.type,callerId:currentUser.uid}, status: 'calling'});
     
-    // Ждем ответа
+    // Слушаем изменение статуса звонка
     onSnapshot(cr, s => {
         const d = s.data();
-        if(!pc.currentRemoteDescription && d?.answer) {
+        if(!d) return;
+        
+        // Если собеседник ответил
+        if(!pc.currentRemoteDescription && d.answer) {
             pc.setRemoteDescription(new RTCSessionDescription(d.answer));
             document.getElementById('call-status').innerText="В разговоре";
-            // ОТВЕТИЛИ: Остановить звон, Играть Join
-            stopRing();
-            soundJoin.play();
+            stopRing(); soundJoin.play();
+        }
+
+        // Если собеседник сбросил (статус ended)
+        if (d.status === 'ended') {
+            window.hangUp(false); // false = не писать в базу, просто закрыть
         }
     });
     onSnapshot(collection(cr,'answerCandidates'), s=>s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
 };
 
-// СЛУШАТЬ ВХОДЯЩИЕ
 function listenCalls(cid) {
     onSnapshot(query(collection(db,"chats",cid,"calls")), s=>{
         s.docChanges().forEach(c=>{
             if(c.type==='added'){
                 const d=c.doc.data();
-                if(d.offer && d.offer.callerId!==currentUser.uid && !d.answer) {
+                if(d.offer && d.offer.callerId!==currentUser.uid && d.status !== 'ended' && !d.answer) {
                     callDocId=c.doc.id; currentChatId=cid;
                     document.getElementById('call-modal').classList.add('active');
                     document.getElementById('btn-answer').style.display='flex';
                     document.getElementById('call-status').innerText="Входящий...";
-                    
-                    // Включаем звук звонка
                     soundRing.play();
                 }
             }
@@ -310,14 +290,16 @@ function listenCalls(cid) {
     });
 }
 
-// ОТВЕТИТЬ
 window.answerCall = async () => {
-    // Взял трубку: Стоп звон, Играть Join
-    stopRing();
-    soundJoin.play();
-
+    stopRing(); soundJoin.play();
     document.getElementById('btn-answer').style.display='none';
     const cr=doc(db,"chats",currentChatId,"calls",callDocId);
+    
+    // Тоже слушаем сброс
+    onSnapshot(cr, s => {
+        if (s.data()?.status === 'ended') window.hangUp(false);
+    });
+
     pc=new RTCPeerConnection(servers);
     localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
     document.getElementById('localVideo').srcObject=localStream;
@@ -327,16 +309,23 @@ window.answerCall = async () => {
     pc.onicecandidate=e=>e.candidate&&addDoc(collection(cr,'answerCandidates'),e.candidate.toJSON());
     const d=(await getDoc(cr)).data(); await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
     const ans=await pc.createAnswer(); await pc.setLocalDescription(ans);
-    await updateDoc(cr,{answer:{type:ans.type,sdp:ans.sdp}});
+    await updateDoc(cr,{answer:{type:ans.type,sdp:ans.sdp}, status:'connected'});
     onSnapshot(collection(cr,'offerCandidates'), s=>s.docChanges().forEach(c=>{ if(c.type==='added') pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); }));
 };
 
-// СБРОСИТЬ
-window.hangUp = () => {
-    // Сбросил: Стоп звон, Играть Leave
-    stopRing();
-    soundLeave.play();
+// notifyDb = true (по умолчанию) - значит я нажал кнопку и надо сказать базе
+// notifyDb = false - значит база сама сказала мне закрыться
+window.hangUp = async (notifyDb = true) => {
+    stopRing(); soundLeave.play();
 
     if(localStream) localStream.getTracks().forEach(t=>t.stop());
-    if(pc) pc.close(); pc=null; document.getElementById('call-modal').classList.remove('active');
+    if(pc) pc.close(); pc=null; localStream=null;
+    document.getElementById('call-modal').classList.remove('active');
+
+    // Если я нажал кнопку сброса — пишу в базу, что звонок окончен
+    if (notifyDb && callDocId && currentChatId) {
+        try {
+            await updateDoc(doc(db, "chats", currentChatId, "calls", callDocId), { status: 'ended' });
+        } catch(e) { console.log("Звонок уже был удален"); }
+    }
 };
