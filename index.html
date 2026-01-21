@@ -2,39 +2,134 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kotogram Web</title>
-    <style>
-        /* CSS: СТИЛЬ ТЕЛЕГРАМ */
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #e6ebee; height: 100vh; overflow: hidden; }
-        
-        /* ЭКРАНЫ */
-        .screen { display: none; height: 100%; justify-content: center; align-items: center; flex-direction: column; }
-        .screen.active { display: flex; }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kotogram</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-        /* КАРТОЧКИ ВХОДА */
-        .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 320px; text-align: center; }
-        .auth-card h2 { margin-top: 0; margin-bottom: 10px; color: #222; }
-        .auth-card p { color: #777; font-size: 14px; margin-bottom: 20px; }
-        .auth-card input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; outline: none; font-size: 16px; transition: 0.2s; }
-        .auth-card input:focus { border-color: #3390ec; }
-        .btn-primary { background: #3390ec; color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        .btn-primary:hover { background: #287dc2; }
+    <div id="call-modal" class="call-modal">
+        <div class="call-content">
+            <h3 id="call-status">Звонок...</h3>
+            
+            <div class="video-container">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <video id="localVideo" autoplay playsinline muted></video>
+            </div>
 
-        /* ОСНОВНОЙ ИНТЕРФЕЙС */
-        #app-container { display: none; width: 100%; height: 100%; max-width: 1400px; margin: 0 auto; background: white; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+            <div class="call-controls">
+                <button id="btn-answer" class="btn-green" style="display:none" onclick="answerCall()">📞</button>
+                <button id="btn-hangup" class="btn-red" onclick="hangUp()">❌</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="drawer-overlay" onclick="toggleMenu()"></div>
+
+    <div class="drawer" id="main-drawer">
+        <div class="drawer-header">
+            <div id="drawer-avatar" class="drawer-avatar-big" onclick="document.getElementById('avatar-upload').click()">📷</div>
+            <div id="drawer-name" class="drawer-username">Загрузка...</div>
+            <div id="drawer-phone" class="drawer-phone">+7...</div>
+            <input type="file" id="avatar-upload" hidden accept="image/*" onchange="uploadAvatar(this)">
+        </div>
+        <div class="drawer-menu">
+            <div class="drawer-item" onclick="openSettings()"><span>⚙️</span> Настройки</div>
+            <div class="drawer-item" onclick="toggleMenu()"><span>❌</span> Закрыть</div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h3>Настройки</h3>
+            <div class="setting-group">
+                <label>Размер шрифта: <span id="font-val">16</span>px</label>
+                <input type="range" min="12" max="24" value="16" oninput="changeFontSize(this.value)">
+            </div>
+            <button class="btn-primary" onclick="closeSettings()">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="loader">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="auth-screens">
+        <div id="screen-phone" class="screen active">
+            <div class="auth-card">
+                <h2>Kotogram</h2>
+                <div id="recaptcha-container"></div>
+                <input type="tel" id="phone-number" placeholder="+7 999 000 00 00" value="+7">
+                <button id="btn-login" class="btn-primary" onclick="sendSms()" disabled>Загрузка...</button>
+            </div>
+        </div>
+        <div id="screen-code" class="screen">
+            <div class="auth-card">
+                <h2>Код из SMS</h2>
+                <input type="number" id="verification-code" placeholder="123456">
+                <button class="btn-primary" onclick="verifyCode()">Войти</button>
+            </div>
+        </div>
+        <div id="screen-nickname" class="screen">
+            <div class="auth-card">
+                <h2>Ваше имя</h2>
+                <input type="text" id="username-input" placeholder="Никнейм">
+                <button class="btn-primary" onclick="saveProfile()">Готово</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-container">
         
-        /* САЙДБАР (СПИСОК ЧАТОВ) */
-        .sidebar { width: 350px; border-right: 1px solid #dfe1e5; display: flex; flex-direction: column; background: white; }
-        .sidebar-header { padding: 12px 15px; display: flex; gap: 10px; align-items: center; }
-        #search-input { flex-grow: 1; padding: 8px 15px; border-radius: 20px; border: 1px solid #f2f2f2; background: #f4f4f5; font-size: 14px; outline: none; }
-        #search-input:focus { background: white; border-color: #3390ec; }
-        .fab-btn { width: 40px; height: 40px; background: white; border-radius: 50%; border: none; color: #777; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; transition: 0.2s; }
-        .fab-btn:hover { background: #f4f4f5; color: #3390ec; }
-        
-        #chats-list { flex-grow: 1; overflow-y: auto; }
-        .chat-item { padding: 10px 15px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 15px; }
-        .chat-item:hover { background: #f4f4f5; }
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="menu-btn" onclick="toggleMenu()">
+                    <div style="font-size:24px">☰</div>
+                </button>
+                <div class="search-wrap">
+                    <input type="text" placeholder="Поиск">
+                </div>
+            </div>
+            <div id="chats-list"></div>
+            <button class="fab-pencil" onclick="addContactPrompt()">✏️</button>
+        </div>
+
+        <div class="chat-window">
+            <div class="chat-header">
+                <button class="back-btn" onclick="closeChat()">⬅</button>
+                <div id="header-avatar" class="avatar-small"></div>
+                <div class="header-info">
+                    <div id="chat-header-name" class="header-name">Kotogram</div>
+                    <div id="chat-header-status" class="header-status">...</div>
+                </div>
+                <button class="call-btn" onclick="startCall()">📞</button>
+            </div>
+
+            <div id="messages-area">
+                <div class="empty-placeholder">Выберите чат</div>
+            </div>
+
+            <div class="input-area">
+                <button class="attach-btn" onclick="document.getElementById('img-input').click()">📎</button>
+                <input type="file" id="img-input" hidden accept="image/*" onchange="sendImage(this)">
+                
+                <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="handleEnter(event)" oninput="handleTyping()">
+                <button class="send-btn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+
+    <script>
+        function sendSms(){} function verifyCode(){} function saveProfile(){} 
+        function toggleMenu(){} function addContactPrompt(){} function sendMessage(){} 
+        function closeChat(){} function handleEnter(){} function uploadAvatar(){} 
+        function sendImage(){} function startCall(){} function answerCall(){} function hangUp(){}
+        function openSettings(){} function closeSettings(){} function changeFontSize(){} function handleTyping(){}
+    </script>
+</body>
+</html>        .chat-item:hover { background: #f4f4f5; }
         .chat-item.active-chat { background: #3390ec; color: white; }
         .chat-item.active-chat .last-msg { color: rgba(255,255,255,0.8); }
         
